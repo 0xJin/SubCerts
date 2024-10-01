@@ -16,6 +16,7 @@ cd SubCerts
 chmod +x *.sh
 ./setup.sh
 ./subcerts.sh -h
+```
 
 ## Features:
 - **Subdomain Extraction**: Utilizes crt.sh, a certificate transparency log search engine, to gather subdomains associated with a target domain.
