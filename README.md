@@ -2,7 +2,7 @@
 
 SubCerts is an automated tool designed to extract subdomains from certificate transparency logs using the crt.sh API. This tool allows security researchers, penetration testers, and developers to identify subdomains of a target domain by leveraging publicly available certificates.
 
-![SubCerts Logo](path/to/your/image.png)
+![SubCerts Logo](https://github.com/0xJin/SubCerts/blob/main/subcerts.png)
 
 Once subdomains are identified, SubCerts uses `httpx` to probe each subdomain, collecting HTTP response codes and titles to provide a quick overview of the status and content of each subdomain. This allows users to efficiently identify live subdomains, potential entry points, or areas of interest for further investigation.
 
