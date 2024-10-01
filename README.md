@@ -4,6 +4,19 @@ SubCerts is an automated tool designed to extract subdomains from certificate tr
 
 Once subdomains are identified, SubCerts uses `httpx` to probe each subdomain, collecting HTTP response codes and titles to provide a quick overview of the status and content of each subdomain. This allows users to efficiently identify live subdomains, potential entry points, or areas of interest for further investigation.
 
+## Installation
+
+### Clone the Repository
+
+To get started, clone this repository to your local machine using `git`:
+
+```bash
+git clone https://github.com/0xJin/SubCerts.git
+cd SubCerts
+chmod +x *.sh
+./setup.sh
+./subcerts.sh -h
+
 ## Features:
 - **Subdomain Extraction**: Utilizes crt.sh, a certificate transparency log search engine, to gather subdomains associated with a target domain.
 - **HTTP Probing**: Automatically sends HTTP/HTTPS requests to each extracted subdomain using `httpx` and returns:
