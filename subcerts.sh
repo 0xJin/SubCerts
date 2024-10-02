@@ -99,12 +99,16 @@ if [ -z "$domain" ]; then
     show_help
 fi
 
-# Function to extract subdomains from crt.sh
+# Function to extract subdomains from crt.sh and filter to only include valid subdomains
 extract_subdomains() {
     crtsh_url="https://crt.sh/?q=%25.$domain&output=json"
     # Fetch subdomains, exclude lines with '@', and log any errors
     subdomains=$(curl -s "$crtsh_url" | jq -r '.[].name_value' | grep -v "@" | sort -u 2>error.log)
-    echo "$subdomains"
+
+    # Filter the subdomains to include only those matching the target domain
+    filtered_subdomains=$(echo "$subdomains" | grep "\.${domain}$")
+
+    echo "$filtered_subdomains"
 }
 
 # Function to run httpx on the extracted subdomains
