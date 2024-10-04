@@ -47,7 +47,7 @@ loading_animation() {
 
 # Function to start the animation in the background
 start_loading() {
-    loading_animation &
+    loading_animation & 
     spinner_pid=$!
 }
 
@@ -102,18 +102,32 @@ fi
 # Function to extract subdomains from crt.sh and filter to only include valid subdomains
 extract_subdomains() {
     crtsh_url="https://crt.sh/?q=%25.$domain&output=json"
+    
     # Fetch subdomains, exclude lines with '@', and log any errors
-    subdomains=$(curl -s "$crtsh_url" | jq -r '.[].name_value' | grep -v "@" | sort -u 2>error.log)
-
-    # Filter the subdomains to include only those matching the target domain
-    filtered_subdomains=$(echo "$subdomains" | grep "\.${domain}$")
-
-    echo "$filtered_subdomains"
+    response=$(curl -s "$crtsh_url")
+    
+    if echo "$response" | jq empty 2>/dev/null; then
+        subdomains=$(echo "$response" | jq -r '.[].name_value' | grep -v "@" | sort -u)
+        
+        # Filter the subdomains to include only those matching the target domain
+        filtered_subdomains=$(echo "$subdomains" | grep "\.${domain}$")
+        
+        echo "$filtered_subdomains"
+    else
+        echo "Error: Received invalid JSON data from crt.sh"
+        stop_loading
+        exit 1
+    fi
 }
 
 # Function to run httpx on the extracted subdomains
 run_httpx() {
     subdomains="$1"
+    if [ -z "$subdomains" ]; then
+        echo "No valid subdomains found."
+        return
+    fi
+    
     # Run httpx, logging errors
     httpx_results=$(echo "$subdomains" | httpx -status-code -title -silent 2>>error.log)
     echo "$httpx_results"
