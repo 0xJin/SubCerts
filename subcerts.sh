@@ -27,35 +27,39 @@ show_logo() {
 # Loading animation
 loading_animation() {
     chars="/-\|"
-    start_time=$(date +%s) # Record the start time
+    start_time=$(date +%s)
     while :; do
         for (( i=0; i<${#chars}; i++ )); do
-            # Display the animation and elapsed time
             echo -ne "\r\e[31m[*]\e[0m \e[32mSearching for subdomains...\e[0m ${chars:$i:1}"
             sleep 0.1
-
-            # After 60 seconds, display a waiting message
             elapsed_time=$(( $(date +%s) - start_time ))
             if [ "$elapsed_time" -ge 60 ]; then
                 echo -ne "\n\e[31m[*]\e[0m \e[33mThis might take a few minutes. Please wait...\e[0m\n"
-                # Reset the timer to prevent continuous message display
                 start_time=$(date +%s)
             fi
         done
     done
 }
 
-# Function to start the animation in the background
+# Function to start the animation
 start_loading() {
     loading_animation & 
     spinner_pid=$!
+    disown
 }
 
 # Function to stop the loading animation
 stop_loading() {
-    kill "$spinner_pid" &> /dev/null
-    wait "$spinner_pid" 2>/dev/null
+    kill "$spinner_pid" 2>/dev/null
+    printf "\r%-50s\n" " "  # Clear animation line
 }
+
+# Cleanup function
+cleanup() {
+    stop_loading
+    exit 1
+}
+trap cleanup SIGINT
 
 # Variable for output file
 output_file=""
@@ -89,7 +93,7 @@ done
 # Display the logo at the start
 show_logo
 
-# Start the loading animation immediately
+# Start the loading animation
 start_loading
 
 # Check if the domain was provided
@@ -99,57 +103,70 @@ if [ -z "$domain" ]; then
     show_help
 fi
 
-# Function to extract subdomains from crt.sh and filter to only include valid subdomains
+# Function to extract subdomains from crt.sh
 extract_subdomains() {
     crtsh_url="https://crt.sh/?q=%25.$domain&output=json"
     
-    # Fetch subdomains, exclude lines with '@', and log any errors
-    response=$(curl -s "$crtsh_url")
-    
-    if echo "$response" | jq empty 2>/dev/null; then
-        subdomains=$(echo "$response" | jq -r '.[].name_value' | grep -v "@" | sort -u)
-        
-        # Filter the subdomains to include only those matching the target domain
-        filtered_subdomains=$(echo "$subdomains" | grep "\.${domain}$")
-        
-        echo "$filtered_subdomains"
-    else
-        echo "Error: Received invalid JSON data from crt.sh"
-        stop_loading
+    # Check dependencies
+    if ! command -v curl &>/dev/null || ! command -v jq &>/dev/null; then
+        echo "Error: Install 'curl' and 'jq' to run this script."
         exit 1
     fi
+
+    # Fetch data with error handling
+    response=$(curl -f -s "$crtsh_url" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo "Error: Connection to crt.sh failed. Check your network or the domain."
+        echo "Debug: $response"
+        exit 1
+    fi
+
+    # Validate JSON
+    if ! echo "$response" | jq -e '.' >/dev/null 2>&1; then
+        echo "Error: crt.sh returned invalid JSON. Response received:"
+        echo "$response"
+        exit 1
+    fi
+
+    # Extract and filter subdomains
+    subdomains=$(echo "$response" | jq -r '.[].name_value' | grep -v "@" | sed 's/^\*\.//g' | sort -u)
+    filtered_subdomains=$(echo "$subdomains" | grep -E "\.?${domain}$" | awk '!seen[$0]++')
+
+    echo "$filtered_subdomains"
 }
 
-# Function to run httpx on the extracted subdomains
+# Function to run httpx
 run_httpx() {
     subdomains="$1"
-    if [ -z "$subdomains" ]; then
-        echo "No valid subdomains found."
+    [ -z "$subdomains" ] && return
+
+    if ! command -v httpx &>/dev/null; then
+        echo "Error: Install 'httpx' to get live subdomains."
         return
     fi
-    
-    # Run httpx, logging errors
-    httpx_results=$(echo "$subdomains" | httpx -status-code -title -silent 2>>error.log)
-    echo "$httpx_results"
+
+    echo "$subdomains" | httpx -status-code -title -silent 2>>error.log
 }
 
-# Extract subdomains and run httpx
+# Main execution
 subdomains=$(extract_subdomains)
-httpx_results=$(run_httpx "$subdomains")
-
-# Stop the loading animation once done
 stop_loading
 
-# Print both subdomains and httpx results at the end
+# Print results
 echo -e "\n[*] Subdomains found:"
-echo "$subdomains"
+[ -n "$subdomains" ] && echo "$subdomains" || echo "No subdomains found."
 
 echo -e "\n[*] httpx Results:"
-echo "$httpx_results"
+httpx_results=$(run_httpx "$subdomains")
+[ -n "$httpx_results" ] && echo "$httpx_results" || echo "No live subdomains detected."
 
-# Save subdomains and httpx results to the output file if specified
+# Save results if specified
 if [ -n "$output_file" ]; then
-    echo "$subdomains" > "$output_file"
-    echo "$httpx_results" >> "$output_file"
+    {
+        echo "[*] Subdomains found:"
+        echo "$subdomains"
+        echo -e "\n[*] httpx Results:"
+        echo "$httpx_results"
+    } > "$output_file"
     echo "[*] Results saved to $output_file"
 fi
